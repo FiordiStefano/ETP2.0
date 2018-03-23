@@ -53,8 +53,8 @@ public class FileDigestCompare {
      * @param args the command line arguments
      */
     public static void main(String[] args) throws IOException {
-        File oldVersion = new File("E:/Files/Episodi.rar"); // vecchia versione del file
-        File newVersion = new File("E:/Files/Episodi2.rar"); // nuova versione del file
+        File oldVersion = new File("E:/vdis/FSV.vdi"); // vecchia versione del file
+        File newVersion = new File("E:/vdis/FSV 2.vdi"); // nuova versione del file
         //File downloaded = new File("E:/VMs/FSV2.vdi"); // nuovo file per scaricare la nuova versione
         int NumberOfBytes = 10 * 1024 * 1024; // dimensione dei pacchetti = 10 MB
         long oldPackets, newPackets; // numero dei pacchetti della vecchia e nuova versione
@@ -75,7 +75,7 @@ public class FileDigestCompare {
         }
 
         ByteBuffer buf = ByteBuffer.allocate(NumberOfBytes);
-        long[] newDigests = new long[(int) oldPackets]; // Vettore dei digest vecchia versione
+        long[] newDigests = new long[(int) newPackets]; // Vettore dei digest vecchia versione
         int len = 0;
         System.out.println("Digests calculation...");
         for (int i = 0; (len = fNew.read(buf, (long) i * NumberOfBytes)) != -1; i++) {
@@ -87,30 +87,31 @@ public class FileDigestCompare {
         long time = System.nanoTime();
         len = 0;
         int i;
+        if (newVersion.length() < oldVersion.length()) {
+            fOutOld.truncate(newVersion.length());
+        }
         for (i = 0; (len = fOld.read(buf, (long) i * NumberOfBytes)) != -1; i++) {
-            if (i >= newDigests.length) {
-                fOld.truncate(newVersion.length());
-                break;
-            } else {
-                byte[] oldPacket = createPacket(buf);
-                long oldDigest = CRC32Hashing(oldPacket); // calcolo del digest
 
-                if (oldDigest == newDigests[i]) {
-                    ByteBuffer newBuf = ByteBuffer.allocate(NumberOfBytes);
-                    fNew.read(newBuf, i * NumberOfBytes);
-                    fOutOld.write(ByteBuffer.wrap(createPacket(newBuf)), i * NumberOfBytes);
-                    break;
-                }
+            byte[] oldPacket = createPacket(buf);
+            long oldDigest = CRC32Hashing(oldPacket); // calcolo del digest
+
+            if (oldDigest != newDigests[i]) {
+                ByteBuffer newBuf = ByteBuffer.allocate(NumberOfBytes);
+                fNew.read(newBuf, i * NumberOfBytes);
+                fOutOld.write(ByteBuffer.wrap(createPacket(newBuf)), i * NumberOfBytes);
+                break;
             }
             
             float percent = 100f / newPackets * (i + 1);
             System.out.println(percent + "%");
         }
-
         if (newVersion.length() > oldVersion.length()) {
             for (; (len = fNew.read(buf, (long) i * NumberOfBytes)) != -1; i++) {
                 byte[] newPacket = createPacket(buf);
                 fOutOld.write(ByteBuffer.wrap(newPacket));
+                
+                float percent = 100f / newPackets * (i + 1);
+                System.out.println(percent + "%");
             }
         }
 
