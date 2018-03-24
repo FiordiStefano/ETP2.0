@@ -7,7 +7,6 @@ package filedigestcompare;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -16,15 +15,15 @@ import java.util.zip.CRC32;
 import java.util.zip.Checksum;
 
 /**
- *
+ * Comparazione tra file ed aggiornamento attraverso confronto tra digest dei file
  * @author Stefano Fiordi
  */
 public class FileDigestCompare {
 
     /**
-     *
-     * @param packet
-     * @return
+     * Crea il digest CRC32 di un array binario
+     * @param packet array binario
+     * @return il digest
      * @throws NoSuchAlgorithmException
      */
     static long CRC32Hashing(byte[] packet) {
@@ -36,9 +35,9 @@ public class FileDigestCompare {
     }
 
     /**
-     *
-     * @param buf
-     * @return
+     * Crea il pacchetto array binario attraverso un buffer binario
+     * @param buf buffer binario
+     * @return il pacchetto array binario
      */
     static byte[] createPacket(ByteBuffer buf) {
         buf.flip();
@@ -55,12 +54,11 @@ public class FileDigestCompare {
     public static void main(String[] args) throws IOException {
         File oldVersion = new File("E:/vdis/FSV.vdi"); // vecchia versione del file
         File newVersion = new File("E:/vdis/FSV 2.vdi"); // nuova versione del file
-        //File downloaded = new File("E:/VMs/FSV2.vdi"); // nuovo file per scaricare la nuova versione
         int NumberOfBytes = 10 * 1024 * 1024; // dimensione dei pacchetti = 10 MB
         long oldPackets, newPackets; // numero dei pacchetti della vecchia e nuova versione
-        FileChannel fOld = new FileInputStream(oldVersion).getChannel();
-        FileChannel fNew = new FileInputStream(newVersion).getChannel();
-        FileChannel fOutOld = FileChannel.open(oldVersion.toPath(), StandardOpenOption.WRITE);
+        FileChannel fOld = new FileInputStream(oldVersion).getChannel(); // Canale di lettura del vecchio file
+        FileChannel fNew = new FileInputStream(newVersion).getChannel(); // Canale di lettura del nuovo file
+        FileChannel fOutOld = FileChannel.open(oldVersion.toPath(), StandardOpenOption.WRITE); // Canale di scrittura sul vecchio file in append
 
         // calcolo del numero di pacchetti
         if (oldVersion.length() % NumberOfBytes == 0) {
@@ -74,12 +72,12 @@ public class FileDigestCompare {
             newPackets = newVersion.length() / NumberOfBytes + 1;
         }
 
-        ByteBuffer buf = ByteBuffer.allocate(NumberOfBytes);
-        long[] newDigests = new long[(int) newPackets]; // Vettore dei digest vecchia versione
+        ByteBuffer buf = ByteBuffer.allocate(NumberOfBytes); // Buffer di appoggio per i canali di lettura/scrittura
+        long[] newDigests = new long[(int) newPackets]; // Vettore digest nuovo file
         int len = 0;
         System.out.println("Digests calculation...");
         for (int i = 0; (len = fNew.read(buf, (long) i * NumberOfBytes)) != -1; i++) {
-            newDigests[i] = CRC32Hashing(createPacket(buf));
+            newDigests[i] = CRC32Hashing(createPacket(buf)); // calcolo dell'hashing cRC32
         }
         System.out.println("Digest calculation ended");
 
@@ -87,6 +85,7 @@ public class FileDigestCompare {
         long time = System.nanoTime();
         len = 0;
         int i;
+        // troncamento del vecchio file in caso la dimensione sia suoeriore a quella del nuovo
         if (newVersion.length() < oldVersion.length()) {
             fOutOld.truncate(newVersion.length());
         }
@@ -94,17 +93,18 @@ public class FileDigestCompare {
 
             byte[] oldPacket = createPacket(buf);
             long oldDigest = CRC32Hashing(oldPacket); // calcolo del digest
-
+            // se il digest del pacchetto del vecchio file è diverso da quello del nuovo viene sostituito con il pacchetto di quest'ultimo
             if (oldDigest != newDigests[i]) {
                 ByteBuffer newBuf = ByteBuffer.allocate(NumberOfBytes);
                 fNew.read(newBuf, i * NumberOfBytes);
-                fOutOld.write(ByteBuffer.wrap(createPacket(newBuf)), i * NumberOfBytes);
+                fOutOld.write(ByteBuffer.wrap(createPacket(newBuf)), i * NumberOfBytes); // sovrascrivo la parte del vecchio file con il pacchetto corrispondente del nuovo
                 break;
             }
             
-            float percent = 100f / newPackets * (i + 1);
+            float percent = 100f / newPackets * (i + 1); // progresso in percentuale
             System.out.println(percent + "%");
         }
+        // aggiunta dei pacchetti in più del nuovo file rispetto al vecchio in caso questo sia più piccolo
         if (newVersion.length() > oldVersion.length()) {
             for (; (len = fNew.read(buf, (long) i * NumberOfBytes)) != -1; i++) {
                 byte[] newPacket = createPacket(buf);
@@ -119,6 +119,7 @@ public class FileDigestCompare {
         System.out.println("Process ended");
         System.out.printf("Took %.3f seconds%n", time / 1e9);
 
+        // chiusura canali
         fOutOld.close();
         fNew.close();
         fOld.close();
