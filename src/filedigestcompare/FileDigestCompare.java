@@ -15,13 +15,16 @@ import java.util.zip.CRC32;
 import java.util.zip.Checksum;
 
 /**
- * Comparazione tra file ed aggiornamento attraverso confronto tra digest dei file
+ * Comparazione tra file ed aggiornamento attraverso confronto tra digest dei
+ * file
+ *
  * @author Stefano Fiordi
  */
 public class FileDigestCompare {
 
     /**
      * Crea il digest CRC32 di un array binario
+     *
      * @param packet array binario
      * @return il digest
      * @throws NoSuchAlgorithmException
@@ -29,20 +32,20 @@ public class FileDigestCompare {
     static long CRC32Hashing(byte[] packet) {
         Checksum checksum = new CRC32();
         checksum.update(packet, 0, packet.length);
-        long digest = checksum.getValue();
 
-        return digest;
+        return checksum.getValue();
     }
 
     /**
      * Crea il pacchetto array binario attraverso un buffer binario
+     *
      * @param buf buffer binario
      * @return il pacchetto array binario
      */
     static byte[] createPacket(ByteBuffer buf) {
         buf.flip();
         byte[] packet = new byte[buf.remaining()];
-        buf.get(packet, 0, buf.remaining());
+        buf.get(packet);
         buf.clear();
 
         return packet;
@@ -52,8 +55,8 @@ public class FileDigestCompare {
      * @param args the command line arguments
      */
     public static void main(String[] args) throws IOException {
-        File oldVersion = new File("E:/vdis/FSV.vdi"); // vecchia versione del file
-        File newVersion = new File("E:/vdis/FSV 2.vdi"); // nuova versione del file
+        File oldVersion = new File(/*"C:/Users/Stefano Fiordi/Desktop/Windows10.iso"*/"E:/vdis/FSV.vdi"); // vecchia versione del file
+        File newVersion = new File(/*"C:/Users/Stefano Fiordi/Desktop/Windows10.iso"*/"E:/vdis/FSV 2.vdi"); // nuova versione del file
         int NumberOfBytes = 10 * 1024 * 1024; // dimensione dei pacchetti = 10 MB
         long oldPackets, newPackets; // numero dei pacchetti della vecchia e nuova versione
         FileChannel fOld = new FileInputStream(oldVersion).getChannel(); // Canale di lettura del vecchio file
@@ -72,17 +75,32 @@ public class FileDigestCompare {
             newPackets = newVersion.length() / NumberOfBytes + 1;
         }
 
+        long time = System.nanoTime();
         ByteBuffer buf = ByteBuffer.allocate(NumberOfBytes); // Buffer di appoggio per i canali di lettura/scrittura
         long[] newDigests = new long[(int) newPackets]; // Vettore digest nuovo file
         int len = 0;
+        ThreadGroup tg = new ThreadGroup("hashing");
+        int np = Runtime.getRuntime().availableProcessors();
         System.out.println("Digests calculation...");
         for (int i = 0; (len = fNew.read(buf, (long) i * NumberOfBytes)) != -1; i++) {
-            newDigests[i] = CRC32Hashing(createPacket(buf)); // calcolo dell'hashing cRC32
+            //newDigests[i] = CRC32Hashing(createPacket(buf)); // calcolo dell'hashing CRC32
+            while (true) {
+                if (tg.activeCount() < np) {
+                    new Thread(tg, new tHashCRC(buf, i, newDigests)).start();
+                    buf.clear();
+                    break;
+                } else {
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
         }
         System.out.println("Digest calculation ended");
-
+        
         System.out.println("Starting process...");
-        long time = System.nanoTime();
         len = 0;
         int i;
         // troncamento del vecchio file in caso la dimensione sia suoeriore a quella del nuovo
@@ -114,7 +132,7 @@ public class FileDigestCompare {
                 System.out.println(percent + "%");
             }
         }
-
+        
         time = System.nanoTime() - time;
         System.out.println("Process ended");
         System.out.printf("Took %.3f seconds%n", time / 1e9);
